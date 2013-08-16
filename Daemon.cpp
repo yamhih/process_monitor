@@ -41,40 +41,56 @@ void Daemon::add(const char *name,const char *cmd)
 Program::State Daemon::update_state_if_terminated(Program *p)
 {
     Program::State origin_state=p->get_state();
-    Program::State current_state=Program::UNKNOWN;
     switch (origin_state)
     {
-        case Program::STARTING:
-            current_state=Program::FATAL;
-            break;
-        case Program::STOPPING:
-            current_state=Program::STOPPED;
-            break;
-        case Program::RUNNING:
-            current_state=Program::EXITED;
-            break;
-        default:
-            break;
+//    case Program::STARTING:
+//        p->update_state(Program::FATAL);
+//        break;
+    case Program::STOPPING:
+        p->update_state(Program::STOPPED);
+        break;
+    case Program::RUNNING:
+        p->update_state(Program::EXITED);
+        break;
+    case Program::BACKOFF:
+        p->update_state(Program::FATAL);
+        break;
+    default:
+        p->update_state(Program::UNKNOWN);
+        break;
     }
-    p->update_state(current_state);
     return origin_state; 
 }
 
+void Daemon::show()
+{
+    printf("$$$$$$$$$$$$$$$$$$$$$$$\n");
+    for (ProgramMap::iterator it=v_program.begin();it!=v_program.end();++it)
+    {
+        Program *p=(it->second);
+        printf("%s:%d\n",it->first,p->get_state());
+    }
+    printf("---------------------\n");
+}
 void Daemon::loop()
 {
     printf("waitpid .......\n");
     while (true)
     {
+        show();
         int pid=waitpid(-1,NULL,0);
         if (pid<0)
         {
+            perror("waitpid");
             printf("DONE  \n");
-            return;
+            sleep(10);
+            continue;
         }
 
         for (ProgramMap::iterator it=v_program.begin();it!=v_program.end();++it)
         {
             Program *p=(it->second);
+//            printf("%d==%s:%d\n",pid,it->first,p->get_state());
             if (pid==p->get_pid())
             {
                 Program::State s=update_state_if_terminated(p);
@@ -82,6 +98,7 @@ void Daemon::loop()
                 {
                 case Program::RUNNING:
                 case Program::STARTING:
+                case Program::BACKOFF:
                     p->start();
                     break;
                 default:

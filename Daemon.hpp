@@ -29,6 +29,7 @@ public:
 private:
     Program *get_program(const char *name);
     Program::State update_state_if_terminated(Program *p);
+    void show();
 private:
     ProgramMap  v_program;
 };
