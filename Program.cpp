@@ -75,7 +75,11 @@ void Program::update_state(State s)
 
 int  Program::get_pid()
 {
-    return pid;
+    if (get_state()==RUNNING)
+    {
+        return pid;
+    }
+    return -1;
 }
 Program::State Program::get_state()
 {
@@ -90,30 +94,46 @@ void Program::start()
 
     char *const *arg=argv.get();
 
-    State s=UNKNOWN;
+    int fds[2];
+    if (pipe(fds)<0)
+    {
+        perror("pipe");
+    }
+
+    if (fcntl(fds[1],F_SETFD,1)<0)
+    {
+        perror("fcntl");
+    }
+
     pid=fork();
     if(pid==0)
     {
+        close(fds[0]);
         execve(arg[0],arg,env);
         printf("Game over ..........\n");
+        write(fds[1],"w",1);
+        close(fds[1]);
         exit(1);
     }
     else if (pid>0)
     {
-        sleep(1);
-        int ret=waitpid(pid,NULL,WNOHANG);
+        close(fds[1]);
         printf("i am here..........\n");
-        if (pid==ret)
-            s=FATAL;
-        else if (pid==0)
-            s=RUNNING;
+
+        char c;
+        if (read(fds[0],&c,1)==0)
+        {
+            printf("execve success ...\n");
+            update_state(RUNNING);
+        }
         else
-            s=UNKNOWN;
-        update_state(s);
+            update_state(BACKOFF);
+
+        close(fds[0]);
     }
     else
     {
-        update_state(s);
+        update_state(UNKNOWN);
     }
 }
 
